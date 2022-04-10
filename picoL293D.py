@@ -36,9 +36,17 @@ class Motor():
         self.Speed.duty_u16(int(speed/100*65536))
 
 def getAngleDirection(angle):
-    oppositeAngle = (180 - angle) 
+    global girosc_ang_z_prev;
+    angleConvert = convertAngleTo360(angle)
+    oneAngle = convertAngleTo360(girosc_ang_z_prev - angleConvert);
+    twoAngle = convertAngleTo360((360-girosc_ang_z_prev)+angleConvert);
 
-    arcoOne = (2*3.1416*2*angle)/360
+    if(girosc_ang_z_prev <= angleConvert+ 3 and girosc_ang_z_prev >= angleConvert-3 ):
+        return 0;
+    if(oneAngle > twoAngle):
+        return 3;
+    return 4;
+
 
 def convertAngleTo360(angle):
     return (((angle%360)+360)%360)
@@ -52,6 +60,7 @@ async def convertAndSetAngle():
         angleZ= round(imu.gyro.z)-1
         angle = (angleZ)*dt/1000.0 + girosc_ang_z_prev;
         girosc_ang_z_prev = convertAngleTo360(angle);
+        print(girosc_ang_z_prev)
         await uasyncio.sleep(0.01)
 
 def motorMove(speed,direction):
@@ -70,11 +79,11 @@ def motorMove(speed,direction):
         Motor1.moveBack();
         Motor2.moveBack();
     if direction == 3: #girar izquierda
-        Motor1.moveStop();
+        Motor1.moveBack();
         Motor2.moveForward();
     if direction == 4: #girar derecha
         Motor1.moveForward();
-        Motor2.moveStop();
+        Motor2.moveBack();
         
 async def moveToAngle(angle,speed):
     directionAngle = getAngleDirection(angle);
@@ -83,12 +92,19 @@ async def moveToAngle(angle,speed):
         motorMove(speed,directionAngle);
         directionAngle = getAngleDirection(angle);
         await uasyncio.sleep(0.01)
+    motorMove(speed,0);
 
-# sleep(5)
 motorMove(100,0);
+sleep(5)
 async def main():
     uasyncio.create_task(convertAndSetAngle());
-    await moveToAngle(50,50);
+    # await moveToAngle(50,50);
+    # sleep(2)
+    await moveToAngle(-10,50)
+    sleep(2)
+    await moveToAngle(270,50)
+    sleep(2)
+    await moveToAngle(50,50)
 
 uasyncio.run(main());
 
@@ -96,12 +112,11 @@ uasyncio.run(main());
 ############## RUN Robot
 
     # sleep(2)
-    # moveToAngle(0,50)
-    # sleep(2)
-    # moveToAngle(-70,50)
     # sleep(2)
     # moveToAngle(90,50)
     # sleep(2)
     # moveToAngle(-200,70)
     # sleep(2)
     # moveToAngle(0,50)
+
+
