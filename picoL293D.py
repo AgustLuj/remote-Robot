@@ -1,6 +1,8 @@
 from machine import Pin, PWM, I2C
 from time import sleep,ticks_ms
 from imu import MPU6050
+import uasyncio
+
 
 M1pwmPIN=16
 M2pwmPIN=17
@@ -14,16 +16,6 @@ imu = MPU6050(i2c)
 girosc_ang_z_prev=0
 
 startTime = ticks_ms();
-
-def convertAndSetAngle():
-    global girosc_ang_z_prev;
-    global startTime;
-    dt = ticks_ms()-startTime;
-    startTime=ticks_ms();
-    angleZ= round(imu.gyro.z)-1
-    angle = (angleZ)*dt/1000.0 + girosc_ang_z_prev;
-    girosc_ang_z_prev = angle
-    print(round(angle))
 
 class Motor():
     def __init__(self,cwGP,acwGP,speedGP):
@@ -43,38 +35,73 @@ class Motor():
         self.Speed.freq(50)
         self.Speed.duty_u16(int(speed/100*65536))
 
+def getAngleDirection(angle):
+    oppositeAngle = (180 - angle) 
+
+    arcoOne = (2*3.1416*2*angle)/360
+
+def convertAngleTo360(angle):
+    return (((angle%360)+360)%360)
+
+async def convertAndSetAngle():    
+    global girosc_ang_z_prev;
+    global startTime;
+    while True:   
+        dt = ticks_ms()-startTime;
+        startTime=ticks_ms();
+        angleZ= round(imu.gyro.z)-1
+        angle = (angleZ)*dt/1000.0 + girosc_ang_z_prev;
+        girosc_ang_z_prev = convertAngleTo360(angle);
+        await uasyncio.sleep(0.01)
+
 def motorMove(speed,direction):
     Motor1 = Motor(M1cwPin,M1acwPin,M1pwmPIN);
     Motor2 = Motor(M2cwPin,M2acwPin,M2pwmPIN);
     
     Motor1.setSpeed(speed)
     Motor2.setSpeed(speed)
-    if direction == 0:
+    if direction == 0: #stop
         Motor1.moveStop();
         Motor2.moveStop();
-    if direction == 1:
+    if direction == 1: #adelante
         Motor1.moveForward();
         Motor2.moveForward();
-    if direction == 2:
+    if direction == 2: #atrás
         Motor1.moveBack();
         Motor2.moveBack();
-    if direction == 3:
+    if direction == 3: #girar izquierda
         Motor1.moveStop();
         Motor2.moveForward();
-    if direction == 4:
+    if direction == 4: #girar derecha
         Motor1.moveForward();
         Motor2.moveStop();
-    
-# main program
+        
+async def moveToAngle(angle,speed):
+    directionAngle = getAngleDirection(angle);
+    while directionAngle != 0:
+        print(directionAngle)
+        motorMove(speed,directionAngle);
+        directionAngle = getAngleDirection(angle);
+        await uasyncio.sleep(0.01)
+
+# sleep(5)
 motorMove(100,0);
-while True:
-    convertAndSetAngle()
-    if girosc_ang_z_prev <= 5 and girosc_ang_z_prev >= -5:
-        print('stop')
-        motorMove(100,0);
-    if girosc_ang_z_prev >= 6 and girosc_ang_z_prev <= 90:
-        print('derecha')
-        motorMove(50,4);
-    if girosc_ang_z_prev <= -6 and girosc_ang_z_prev >= -360:
-        print('izquierda')
-        motorMove(50,3);
+async def main():
+    uasyncio.create_task(convertAndSetAngle());
+    await moveToAngle(50,50);
+
+uasyncio.run(main());
+
+# Setup Main Functions
+############## RUN Robot
+
+    # sleep(2)
+    # moveToAngle(0,50)
+    # sleep(2)
+    # moveToAngle(-70,50)
+    # sleep(2)
+    # moveToAngle(90,50)
+    # sleep(2)
+    # moveToAngle(-200,70)
+    # sleep(2)
+    # moveToAngle(0,50)
